@@ -4,7 +4,7 @@ A copycat for the great lib https://github.com/websockets/wscat but it does not 
 
 ## Installation
 
-
+[Download binary](https://github.com/ylgrgyq/wsdog/releases/tag/1.0.0).
 
 ## Usage
 
