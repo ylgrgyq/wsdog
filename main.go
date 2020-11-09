@@ -6,16 +6,16 @@ import (
 )
 
 type ApplicationOptions struct {
-	ListenPort  uint16 `short:"l" long:"listen" description:"listen on port"`
-	ConnectUrl  string `short:"c" long:"connect" description:"connect to a WebSocket server"`
-	EnableDebug bool   `long:"debug" description:"enable debug log"`
-	NoColor     bool   `long:"no-color" description:"Run without color"`
+	ListenPort   uint16 `short:"l" long:"listen" description:"listen on port"`
+	ConnectUrl   string `short:"c" long:"connect" description:"connect to a WebSocket server"`
+	EnableDebug  bool   `long:"debug" description:"enable debug log"`
+	NoColor      bool   `long:"no-color" description:"Run without color"`
 	ShowPingPong bool   `short:"P" long:"show-ping-pong" description:"print a notification when a ping or pong is received"`
 	Subprotocol  string `short:"s" long:"subprotocol" description:"optional subprotocol (default: )"`
 }
 
 type ListenOnPortOptions struct {
-
+	Echo bool `long:"echo" description:"write received message back to client (default: false)"`
 }
 
 type ConnectOptions struct {
@@ -30,7 +30,7 @@ type ConnectOptions struct {
 	//Cert           string            `long:"cert" description:"Specify a Client SSL Certificate"`
 	//Key            string            `long:"key" description:"Specify a Client SSL Certificate's key"`
 	//Passphrase     string            `long:"passphrase" description:"Specify a Client SSL Certificate Key's passphrase. If you don't provide a value, it will be prompted for."`
-	EnableSlash    bool              `long:"slash" description:"Enable slash commands for control frames (/ping, /pong, /close [code [, reason]])"`
+	EnableSlash bool `long:"slash" description:"Enable slash commands for control frames (/ping, /pong, /close [code [, reason]])"`
 }
 
 type CommandLineOptions struct {

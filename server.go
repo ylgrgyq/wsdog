@@ -28,6 +28,8 @@ func generateWsHandler(opts CommandLineOptions) func(w http.ResponseWriter, r *h
 			return
 		}
 
+		wsdogLogger.Ok("client connected")
+
 		readWsChan, readFromConnDone := SetupReadFromConn(conn, opts.ShowPingPong)
 		defer closeConn(conn)
 		for {
@@ -36,7 +38,7 @@ func generateWsHandler(opts CommandLineOptions) func(w http.ResponseWriter, r *h
 				return
 			case message := <-readWsChan:
 				wsdogLogger.ReceiveMessagef("< %s", message.payload)
-				if message.messageType == websocket.TextMessage {
+				if message.messageType == websocket.TextMessage && opts.Echo {
 					err = conn.WriteMessage(message.messageType, message.payload)
 					if err != nil {
 						wsdogLogger.Errorf("error: %s", err)
