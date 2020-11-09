@@ -19,7 +19,7 @@ func closeConn(conn *websocket.Conn) {
 }
 
 func generateWsHandler(opts CommandLineOptions) func(w http.ResponseWriter, r *http.Request) {
-	upgrader := websocket.Upgrader{Subprotocols: []string{opts.Subprotocol}}
+	upgrader := websocket.Upgrader{Subprotocols: []string{opts.Subprotocol}, HandshakeTimeout: defaultHandshakeTimeout}
 	return func(w http.ResponseWriter, r *http.Request) {
 		conn, err := upgrader.Upgrade(w, r, nil)
 		if err != nil {
@@ -49,7 +49,7 @@ func generateWsHandler(opts CommandLineOptions) func(w http.ResponseWriter, r *h
 	}
 }
 
-func runAsServer(listenPort uint16, opts CommandLineOptions) {
+func RunAsServer(listenPort uint16, opts CommandLineOptions) {
 	http.HandleFunc("/", generateWsHandler(opts))
 
 	wsdogLogger.Okf("listening on port %d (press CTRL+C to quit)", listenPort)

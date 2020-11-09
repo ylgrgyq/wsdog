@@ -15,12 +15,6 @@ import (
 	"time"
 )
 
-const defaultHandshakeTimeout = 5 * time.Second
-const defaultWriteWaitDuration = 5 * time.Second
-const defaultCloseStatusCode = 1000
-const defaultCloseReason = ""
-const subprotocolHeader = "Sec-WebSocket-Protocol"
-
 func parseConnectUrl(urlStr string) *url.URL {
 	connectUrl, err := url.Parse(urlStr)
 	if err != nil {
@@ -195,7 +189,7 @@ func (client *Client) run(cliOpts CommandLineOptions) {
 	}
 }
 
-func (client *Client) Close() {
+func (client *Client) close() {
 	client.gracefulCloseConn()
 	if err := client.conn.Close(); err != nil {
 		wsdogLogger.Debugf("close client failed: %s", err.Error())
@@ -209,7 +203,7 @@ func checkResponseSubprotocol(requiredProtocol string, resp *http.Response) {
 	}
 }
 
-func runAsClient(url string, cliOpts CommandLineOptions) {
+func RunAsClient(url string, cliOpts CommandLineOptions) {
 	connectUrl := parseConnectUrl(url)
 
 	dialer := newDialer(cliOpts)
@@ -229,7 +223,7 @@ func runAsClient(url string, cliOpts CommandLineOptions) {
 	readWsChan, readWsDoneChan := SetupReadFromConn(conn, cliOpts.ShowPingPong)
 	client := Client{conn, readWsChan, readWsDoneChan, cliOpts.EnableSlash}
 
-	defer client.Close()
+	defer client.close()
 
 	client.run(cliOpts)
 }

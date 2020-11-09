@@ -89,8 +89,8 @@ func main() {
 	var cliOpts = parseCommandLineArguments()
 
 	if cliOpts.ConnectUrl != "" {
-		runAsClient(cliOpts.ConnectUrl, cliOpts)
+		RunAsClient(cliOpts.ConnectUrl, cliOpts)
 	} else {
-		runAsServer(cliOpts.ListenPort, cliOpts)
+		RunAsServer(cliOpts.ListenPort, cliOpts)
 	}
 }

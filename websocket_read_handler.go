@@ -11,7 +11,7 @@ type WebSocketMessage struct {
 	payload     []byte
 }
 
-func SetupPingPongHandler(conn *websocket.Conn, output chan WebSocketMessage) {
+func setupPingPongHandler(conn *websocket.Conn, output chan WebSocketMessage) {
 	pingHandler := func(message string) error {
 		output <- WebSocketMessage{websocket.PingMessage, []byte("Received ping")}
 		err := conn.WriteControl(websocket.PongMessage, []byte(message), time.Now().Add(defaultWriteWaitDuration))
@@ -37,7 +37,7 @@ func SetupReadFromConn(conn *websocket.Conn, showPingPong bool) (chan WebSocketM
 	done := make(chan struct{})
 	output := make(chan WebSocketMessage)
 	if showPingPong {
-		SetupPingPongHandler(conn, output)
+		setupPingPongHandler(conn, output)
 	}
 
 	go func() {
