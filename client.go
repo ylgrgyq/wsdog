@@ -19,7 +19,7 @@ const defaultHandshakeTimeout = 5 * time.Second
 const defaultWriteWaitDuration = 5 * time.Second
 const defaultCloseStatusCode = 1000
 const defaultCloseReason = ""
-const subProtocolHeader = "Sec-WebSocket-Protocol"
+const subprotocolHeader = "Sec-WebSocket-Protocol"
 
 func parseConnectUrl(urlStr string) *url.URL {
 	connectUrl, err := url.Parse(urlStr)
@@ -203,7 +203,8 @@ func (client *Client) Close() {
 }
 
 func checkResponseSubprotocol(requiredProtocol string, resp *http.Response) {
-	if len(resp.Header[subProtocolHeader]) < 1 || resp.Header[subProtocolHeader][0] != requiredProtocol {
+	subProtoHeader := resp.Header[http.CanonicalHeaderKey(subprotocolHeader)]
+	if len(subProtoHeader) < 1 || subProtoHeader[0] != requiredProtocol {
 		wsdogLogger.Fatal("error: Server sent no subprotocol")
 	}
 }

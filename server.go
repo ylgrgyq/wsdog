@@ -6,8 +6,6 @@ import (
 	"net/http"
 )
 
-var upgrader = websocket.Upgrader{} // use default options
-
 func closeConn(conn *websocket.Conn) {
 	// failed to send the last close message is tolerable due to the connection may broken
 	err := conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
@@ -21,6 +19,7 @@ func closeConn(conn *websocket.Conn) {
 }
 
 func generateWsHandler(opts CommandLineOptions) func(w http.ResponseWriter, r *http.Request) {
+	upgrader := websocket.Upgrader{Subprotocols: []string{opts.Subprotocol}}
 	return func(w http.ResponseWriter, r *http.Request) {
 		conn, err := upgrader.Upgrade(w, r, nil)
 		if err != nil {
