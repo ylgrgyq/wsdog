@@ -15,7 +15,8 @@ type ApplicationOptions struct {
 }
 
 type ListenOnPortOptions struct {
-	Echo bool `long:"echo" description:"write received message back to client (default: false)"`
+	Echo       bool   `long:"echo" description:"write received message back to client (default: false)"`
+	ListenHost string `long:"listen-host" default:"0.0.0.0" description:"host to listen on"`
 }
 
 type ConnectOptions struct {

@@ -53,5 +53,5 @@ func RunAsServer(listenPort uint16, opts CommandLineOptions) {
 	http.HandleFunc("/", generateWsHandler(opts))
 
 	wsdogLogger.Okf("listening on port %d (press CTRL+C to quit)", listenPort)
-	wsdogLogger.Fatal(http.ListenAndServe(fmt.Sprintf("localhost:%d", listenPort), nil))
+	wsdogLogger.Fatal(http.ListenAndServe(fmt.Sprintf("%s:%d", opts.ListenHost, listenPort), nil))
 }
