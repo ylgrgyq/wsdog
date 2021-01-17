@@ -31,3 +31,12 @@ checksum:
   name_template: 'checksums.txt'
 snapshot:
   name_template: "{{ .Tag }}-next"
+brews:
+  - tap:
+      owner: ylgrgyq
+      name: homebrew-tap
+    folder: Formula
+    homepage:  https://github.com/ylgrgyq/wsdog
+    description: A command line tool to debug and explore WebSocket. 
+    test: |
+      system "#{bin}/wsdog -v"
