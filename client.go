@@ -29,6 +29,14 @@ func parseConnectUrl(urlStr string) *url.URL {
 		wsdogLogger.Fatalf("missing host in url: \"%s\" to connect", urlStr)
 	}
 
+	if strings.HasPrefix(connectUrl.Scheme, "http") {
+		connectUrl.Scheme = strings.Replace(connectUrl.Scheme, "http", "ws", 1)
+	}
+
+	if connectUrl.Scheme != "wss" && connectUrl.Scheme != "ws" {
+		wsdogLogger.Fatalf("malformed scheme in url: \"%s\" to connect", urlStr)
+	}
+	
 	return connectUrl
 }
 
@@ -69,10 +77,10 @@ func buildConnectHeaders(cliOpts CommandLineOptions) http.Header {
 }
 
 type Client struct {
-	conn    *websocket.Conn
-	readWsChan chan WebSocketMessage
+	conn           *websocket.Conn
+	readWsChan     chan WebSocketMessage
 	readWsDoneChan chan struct{}
-	enableSlash bool
+	enableSlash    bool
 }
 
 func (client *Client) doWriteMessage(messageType int, message []byte) {
