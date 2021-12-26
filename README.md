@@ -34,7 +34,7 @@ Connect To A WebSocket Server Options:
   -n, --no-check        Do not check for unauthorized certificates
   -H, --header=         Set an HTTP header <header:value>. Repeat to set multiple like -H header1:value1 -H header2:value2.
       --auth=           Add basic HTTP authentication header <username:password>.
-      --slash           Enable slash commands for control frames (/ping, /pong, /close [code [, reason]])
+      --slash           Enable slash commands for control frames (/ping, /pong, /close [code [, reason]], /binary [Base64])
 
 Help Options:
   -h, --help            Show this help message
@@ -50,6 +50,17 @@ Connected (press CTRL+C to quit)
 > are you a happy parrot?
 < are you a happy parrot?
 ```
+
+For Binary Message, wsdog support write and print it in Base64 format. Such as
+
+```
+$ wsdog -c ws://echo.websocket.org --slash
+Connected (press CTRL+C to quit)
+> /binary SGVsbG8gd29ybGQh
+<< SGVsbG8gd29ybGQh
+```
+
+Please note that the `--slash` option must be provided to active Slash Command Mode so we can use `/binary` command to send Binary Message in Base64. `SGVsbG8gd29ybGQh` is `Hello world!` in Base64. The leading `<<` means `wsdog` receives a Binary Message and print it's payload in Base64 format on the console. For Text Message, the payload will be print after `<` mark.
 
 ## License
 

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/base64"
 	"github.com/gorilla/websocket"
 	"net"
 	"time"
@@ -13,7 +14,7 @@ type WebSocketMessage struct {
 
 func setupPingPongHandler(conn *websocket.Conn, output chan WebSocketMessage) {
 	pingHandler := func(message string) error {
-		output <- WebSocketMessage{websocket.PingMessage, []byte("Received ping")}
+		wsdogLogger.Ok("Receive Ping frame")
 		err := conn.WriteControl(websocket.PongMessage, []byte(message), time.Now().Add(defaultWriteWaitDuration))
 		if err == websocket.ErrCloseSent {
 			return nil
@@ -24,13 +25,19 @@ func setupPingPongHandler(conn *websocket.Conn, output chan WebSocketMessage) {
 	}
 
 	pongHandler := func(message string) error {
-		output <- WebSocketMessage{websocket.PongMessage, []byte("Received pong")}
+		wsdogLogger.Ok("Receive Pong frame")
 		return nil
 	}
 
 	conn.SetPingHandler(pingHandler)
 	conn.SetPongHandler(pongHandler)
+}
 
+func setupCloseHandler(conn *websocket.Conn) {
+	conn.SetCloseHandler(func(code int, text string) error {
+		wsdogLogger.Okf("Receive close frame (code: %d, reason %s)", code, text)
+		return &websocket.CloseError{Code: code, Text: text}
+	})
 }
 
 func SetupReadFromConn(conn *websocket.Conn, showPingPong bool) (chan WebSocketMessage, chan struct{}) {
@@ -39,7 +46,7 @@ func SetupReadFromConn(conn *websocket.Conn, showPingPong bool) (chan WebSocketM
 	if showPingPong {
 		setupPingPongHandler(conn, output)
 	}
-
+	setupCloseHandler(conn)
 	go func() {
 		defer close(done)
 		for {
@@ -58,4 +65,14 @@ func SetupReadFromConn(conn *websocket.Conn, showPingPong bool) (chan WebSocketM
 		}
 	}()
 	return output, done
+}
+
+func PrintReceivedMessage(message *WebSocketMessage) {
+	switch message.messageType {
+	case websocket.TextMessage:
+		wsdogLogger.ReceiveMessagef("< %s", message.payload)
+	case websocket.BinaryMessage:
+		sEnc := base64.StdEncoding.EncodeToString(message.payload)
+		wsdogLogger.ReceiveMessagef("<< %s", sEnc)
+	}
 }
