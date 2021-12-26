@@ -85,9 +85,18 @@ type Client struct {
 	closed         uint32
 }
 
+type CommandType string
 
-type SlashCommand struct {
-	command   string
+const (
+	PingCommand   CommandType = "ping"
+	PongCommand               = "pong"
+	BinaryCommand             = "binary"
+	TextCommand               = "text"
+	CloseCommand              = "close"
+)
+
+type ConsoleCommand struct {
+	command   CommandType
 	parameter string
 }
 
@@ -102,9 +111,9 @@ func (client *Client) doWriteMessage(messageType int, message []byte) {
 	}
 }
 
-func parseSlashCommand(input string, enableSlash bool) (*SlashCommand, error) {
+func parseConsoleCommand(input string, enableSlash bool) (*ConsoleCommand, error) {
 	if !enableSlash || input[0:1] != "/" {
-		return &SlashCommand{command: "text", parameter: input}, nil
+		return &ConsoleCommand{command: "text", parameter: input}, nil
 	}
 
 	slashInput := input[1:]
@@ -113,25 +122,25 @@ func parseSlashCommand(input string, enableSlash bool) (*SlashCommand, error) {
 	}
 	parsed := strings.SplitN(slashInput, " ", 2)
 	if len(parsed) > 1 {
-		return &SlashCommand{command: parsed[0], parameter: parsed[1]}, nil
+		return &ConsoleCommand{command: CommandType(parsed[0]), parameter: parsed[1]}, nil
 	}
-	return &SlashCommand{command: parsed[0], parameter: ""}, nil
+	return &ConsoleCommand{command: CommandType(parsed[0]), parameter: ""}, nil
 }
 
 func (client *Client) writeMessage(input string) bool {
-	slashCmd, err := parseSlashCommand(input, client.enableSlash)
+	slashCmd, err := parseConsoleCommand(input, client.enableSlash)
 	if err != nil {
 		wsdogLogger.Errorf("invalid slash command. %s", err.Error())
 		return false
 	}
 	switch slashCmd.command {
-	case "ping":
+	case PingCommand:
 		client.doWriteMessage(websocket.PingMessage, nil)
-	case "pong":
+	case PongCommand:
 		client.doWriteMessage(websocket.PongMessage, nil)
-	case "text":
+	case TextCommand:
 		client.doWriteMessage(websocket.TextMessage, []byte(slashCmd.parameter))
-	case "binary":
+	case BinaryCommand:
 		if len(slashCmd.parameter) == 0 {
 			break
 		}
@@ -141,7 +150,7 @@ func (client *Client) writeMessage(input string) bool {
 			break
 		}
 		client.doWriteMessage(websocket.BinaryMessage, sDec)
-	case "close":
+	case CloseCommand:
 		statusCode := defaultCloseStatusCode
 		reason := defaultCloseReason
 		re := regexp.MustCompile("\\s+")
