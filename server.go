@@ -23,13 +23,16 @@ func generateWsHandler(opts CommandLineOptions) func(w http.ResponseWriter, r *h
 
 		wsdogLogger.Ok("Client connected")
 
-		readWsChan, readFromConnDone := SetupReadFromConn(conn, opts.ShowPingPong)
+		readWsChan, _ := SetupReadFromConn(conn, opts.ShowPingPong)
 		defer closeConn(conn)
 		for {
 			select {
-			case <-readFromConnDone:
-				return
-			case message := <-readWsChan:
+			//case <-readFromConnDone:
+			//	return
+			case message, ok := <-readWsChan:
+				if !ok {
+					return
+				}
 				PrintReceivedMessage(&message)
 
 				if opts.Echo {

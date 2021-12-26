@@ -168,17 +168,6 @@ func (client *Client) writeMessage(input string) bool {
 	return false
 }
 
-func (client *Client) gracefulCloseConn() {
-	// Cleanly close the connection by sending a close message and then
-	// waiting (with timeout) for the server to close the connection.
-	client.doWriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
-
-	select {
-	case <-client.readWsDoneChan:
-	case <-time.After(time.Second):
-	}
-}
-
 func (client *Client) executeCommandThenShutdown(cliOpts CommandLineOptions) {
 	client.writeMessage(cliOpts.ExecuteCommand)
 
@@ -192,9 +181,10 @@ func (client *Client) executeCommandThenShutdown(cliOpts CommandLineOptions) {
 		select {
 		case <-ticker.C:
 			return
-		case <-client.readWsDoneChan:
-			return
-		case message := <-client.readWsChan:
+		case message, ok := <-client.readWsChan:
+			if !ok {
+				return
+			}
 			PrintReceivedMessage(&message)
 		case <-interrupt:
 			return
@@ -211,8 +201,6 @@ func (client *Client) loopExecuteCommandFromConsole(cliOpts CommandLineOptions) 
 
 	for {
 		select {
-		case <-client.readWsDoneChan:
-			return
 		case <-consoleReader.done:
 			return
 		case output := <-consoleReader.outputChan:
@@ -221,7 +209,10 @@ func (client *Client) loopExecuteCommandFromConsole(cliOpts CommandLineOptions) 
 					return
 				}
 			}
-		case message := <-client.readWsChan:
+		case message, ok := <-client.readWsChan:
+			if !ok {
+				return
+			}
 			consoleReader.Clean()
 			PrintReceivedMessage(&message)
 			consoleReader.Refresh()
@@ -243,6 +234,7 @@ func (client *Client) close() {
 	if !atomic.CompareAndSwapUint32(&client.closed, 0, 1) {
 		return
 	}
+	close(client.readWsDoneChan)
 	if err := client.conn.Close(); err != nil {
 		wsdogLogger.Debugf("close client failed: %s", err.Error())
 	}
@@ -252,7 +244,10 @@ func (client *Client) gracefulClose() {
 	if !atomic.CompareAndSwapUint32(&client.closed, 0, 1) {
 		return
 	}
-	client.gracefulCloseConn()
+	// Cleanly close the connection by sending a close message and then
+	// waiting (with timeout) for the server to close the connection.
+	client.doWriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
+	close(client.readWsDoneChan)
 	if err := client.conn.Close(); err != nil {
 		wsdogLogger.Debugf("close client failed: %s", err.Error())
 	}

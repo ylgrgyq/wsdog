@@ -48,20 +48,27 @@ func SetupReadFromConn(conn *websocket.Conn, showPingPong bool) (chan WebSocketM
 	}
 	setupCloseHandler(conn)
 	go func() {
-		defer close(done)
+		defer close(output)
 		for {
-			mt, message, err := conn.ReadMessage()
-			if err != nil {
-				closeErr, ok := err.(*websocket.CloseError)
-				if ok {
-					wsdogLogger.Okf("Disconnected (code: %d, reason: \"%s\")", closeErr.Code, closeErr.Text)
-				} else {
-					wsdogLogger.Errorf("error: %s", err.Error())
-				}
+			select {
+			case <- done:
+				wsdogLogger.Okf("Disconnected")
 				return
+			default:
+				mt, message, err := conn.ReadMessage()
+				if err != nil {
+					closeErr, ok := err.(*websocket.CloseError)
+					if ok {
+						wsdogLogger.Okf("Disconnected (code: %d, reason: \"%s\")", closeErr.Code, closeErr.Text)
+						return
+					} else {
+						wsdogLogger.Debugf("error: %s", err.Error())
+						continue
+					}
+				}
+				output <- WebSocketMessage{mt, message}
 			}
 
-			output <- WebSocketMessage{mt, message}
 		}
 	}()
 	return output, done
