@@ -77,12 +77,19 @@ func buildConnectHeaders(cliOpts CommandLineOptions) http.Header {
 	return headers
 }
 
+type ClientState = uint32
+
+const (
+	NormalState ClientState = iota
+	ClosedState
+)
+
 type Client struct {
 	conn           *websocket.Conn
 	readWsChan     chan WebSocketMessage
 	readWsDoneChan chan struct{}
 	enableSlash    bool
-	closed         uint32
+	closed         ClientState
 }
 
 type CommandType string
@@ -240,7 +247,7 @@ func (client *Client) run(cliOpts CommandLineOptions) {
 }
 
 func (client *Client) close() {
-	if !atomic.CompareAndSwapUint32(&client.closed, 0, 1) {
+	if !atomic.CompareAndSwapUint32(&client.closed, NormalState, ClosedState) {
 		return
 	}
 	close(client.readWsDoneChan)
@@ -250,7 +257,7 @@ func (client *Client) close() {
 }
 
 func (client *Client) gracefulClose() {
-	if !atomic.CompareAndSwapUint32(&client.closed, 0, 1) {
+	if !atomic.CompareAndSwapUint32(&client.closed, NormalState, ClosedState) {
 		return
 	}
 	// Cleanly close the connection by sending a close message and then
@@ -287,7 +294,7 @@ func RunAsClient(url string, cliOpts CommandLineOptions) {
 	wsdogLogger.Ok("Connected (press CTRL+C to quit)")
 
 	readWsChan, readWsDoneChan := SetupReadFromConn(conn, cliOpts.ShowPingPong)
-	client := Client{conn, readWsChan, readWsDoneChan, cliOpts.EnableSlash, 0}
+	client := Client{conn, readWsChan, readWsDoneChan, cliOpts.EnableSlash, NormalState}
 	defer client.gracefulClose()
 	client.run(cliOpts)
 }
