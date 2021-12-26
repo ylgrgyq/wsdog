@@ -7,12 +7,6 @@ import (
 )
 
 func closeConn(conn *websocket.Conn) {
-	// failed to send the last close message is tolerable due to the connection may broken
-	err := conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
-	if err != nil {
-		wsdogLogger.Debugf("write close message failed: %s", err.Error())
-	}
-
 	if err := conn.Close(); err != nil {
 		wsdogLogger.Debugf("close websocket connection failed: %s", err.Error())
 	}
@@ -27,17 +21,21 @@ func generateWsHandler(opts CommandLineOptions) func(w http.ResponseWriter, r *h
 			return
 		}
 
-		wsdogLogger.Ok("client connected")
+		wsdogLogger.Ok("Client connected")
 
-		readWsChan, readFromConnDone := SetupReadFromConn(conn, opts.ShowPingPong)
+		readWsChan, _ := SetupReadFromConn(conn, opts.ShowPingPong)
 		defer closeConn(conn)
 		for {
 			select {
-			case <-readFromConnDone:
-				return
-			case message := <-readWsChan:
-				wsdogLogger.ReceiveMessagef("< %s", message.payload)
-				if message.messageType == websocket.TextMessage && opts.Echo {
+			//case <-readFromConnDone:
+			//	return
+			case message, ok := <-readWsChan:
+				if !ok {
+					return
+				}
+				PrintReceivedMessage(&message)
+
+				if opts.Echo {
 					err = conn.WriteMessage(message.messageType, message.payload)
 					if err != nil {
 						wsdogLogger.Errorf("error: %s", err)
@@ -52,6 +50,6 @@ func generateWsHandler(opts CommandLineOptions) func(w http.ResponseWriter, r *h
 func RunAsServer(listenPort uint16, opts CommandLineOptions) {
 	http.HandleFunc("/", generateWsHandler(opts))
 
-	wsdogLogger.Okf("listening on port %d (press CTRL+C to quit)", listenPort)
+	wsdogLogger.Okf("Listening on port %d (press CTRL+C to quit)", listenPort)
 	wsdogLogger.Fatal(http.ListenAndServe(fmt.Sprintf("%s:%d", opts.ListenHost, listenPort), nil))
 }

@@ -12,6 +12,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 )
 
@@ -36,7 +37,7 @@ func parseConnectUrl(urlStr string) *url.URL {
 	if connectUrl.Scheme != "wss" && connectUrl.Scheme != "ws" {
 		wsdogLogger.Fatalf("malformed scheme in url: \"%s\" to connect", urlStr)
 	}
-	
+
 	return connectUrl
 }
 
@@ -81,6 +82,13 @@ type Client struct {
 	readWsChan     chan WebSocketMessage
 	readWsDoneChan chan struct{}
 	enableSlash    bool
+	closed         uint32
+}
+
+
+type SlashCommand struct {
+	command   string
+	parameter string
 }
 
 func (client *Client) doWriteMessage(messageType int, message []byte) {
@@ -94,18 +102,46 @@ func (client *Client) doWriteMessage(messageType int, message []byte) {
 	}
 }
 
-func (client *Client) writeMessage(input string) {
-	if !client.enableSlash || input[0:1] != "/" {
-		client.doWriteMessage(websocket.TextMessage, []byte(input))
-		return
+func parseSlashCommand(input string, enableSlash bool) (*SlashCommand, error) {
+	if !enableSlash || input[0:1] != "/" {
+		return &SlashCommand{command: "text", parameter: input}, nil
 	}
 
-	switch cmd := input[1:]; {
-	case cmd == "ping":
+	slashInput := input[1:]
+	if len(slashInput) <= 0 {
+		return nil, fmt.Errorf("invalid slash command: %s", slashInput)
+	}
+	parsed := strings.SplitN(slashInput, " ", 2)
+	if len(parsed) > 1 {
+		return &SlashCommand{command: parsed[0], parameter: parsed[1]}, nil
+	}
+	return &SlashCommand{command: parsed[0], parameter: ""}, nil
+}
+
+func (client *Client) writeMessage(input string) bool {
+	slashCmd, err := parseSlashCommand(input, client.enableSlash)
+	if err != nil {
+		wsdogLogger.Errorf("invalid slash command. %s", err.Error())
+		return false
+	}
+	switch slashCmd.command {
+	case "ping":
 		client.doWriteMessage(websocket.PingMessage, nil)
-	case cmd == "pong":
+	case "pong":
 		client.doWriteMessage(websocket.PongMessage, nil)
-	case strings.HasPrefix(cmd, "close"):
+	case "text":
+		client.doWriteMessage(websocket.TextMessage, []byte(slashCmd.parameter))
+	case "binary":
+		if len(slashCmd.parameter) == 0 {
+			break
+		}
+		sDec, err := base64.StdEncoding.DecodeString(slashCmd.parameter)
+		if err != nil {
+			wsdogLogger.Errorf("invalid string in Base64: \"%s\"", slashCmd.parameter)
+			break
+		}
+		client.doWriteMessage(websocket.BinaryMessage, sDec)
+	case "close":
 		statusCode := defaultCloseStatusCode
 		reason := defaultCloseReason
 		re := regexp.MustCompile("\\s+")
@@ -114,6 +150,7 @@ func (client *Client) writeMessage(input string) {
 			var err error
 			if statusCode, err = strconv.Atoi(toks[1]); err != nil {
 				wsdogLogger.Errorf("invalid close status code: \"%s\"", toks[1])
+				break
 			}
 		}
 
@@ -123,20 +160,12 @@ func (client *Client) writeMessage(input string) {
 
 		message := websocket.FormatCloseMessage(statusCode, reason)
 		client.doWriteMessage(websocket.CloseMessage, message)
+		client.close()
+		return true
 	default:
-		client.doWriteMessage(websocket.TextMessage, []byte(input))
+		wsdogLogger.Errorf("unknown slash command: \"%s\"", slashCmd.command)
 	}
-}
-
-func (client *Client) gracefulCloseConn() {
-	// Cleanly close the connection by sending a close message and then
-	// waiting (with timeout) for the server to close the connection.
-	client.doWriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
-
-	select {
-	case <-client.readWsDoneChan:
-	case <-time.After(time.Second):
-	}
+	return false
 }
 
 func (client *Client) executeCommandThenShutdown(cliOpts CommandLineOptions) {
@@ -152,10 +181,11 @@ func (client *Client) executeCommandThenShutdown(cliOpts CommandLineOptions) {
 		select {
 		case <-ticker.C:
 			return
-		case <-client.readWsDoneChan:
-			return
-		case message := <-client.readWsChan:
-			wsdogLogger.ReceiveMessagef("< %s", message.payload)
+		case message, ok := <-client.readWsChan:
+			if !ok {
+				return
+			}
+			PrintReceivedMessage(&message)
 		case <-interrupt:
 			return
 		}
@@ -171,17 +201,20 @@ func (client *Client) loopExecuteCommandFromConsole(cliOpts CommandLineOptions) 
 
 	for {
 		select {
-		case <-client.readWsDoneChan:
-			return
 		case <-consoleReader.done:
 			return
 		case output := <-consoleReader.outputChan:
 			if len(output) > 0 {
-				client.writeMessage(output)
+				if client.writeMessage(output) {
+					return
+				}
 			}
-		case message := <-client.readWsChan:
+		case message, ok := <-client.readWsChan:
+			if !ok {
+				return
+			}
 			consoleReader.Clean()
-			wsdogLogger.ReceiveMessagef("< %s", message.payload)
+			PrintReceivedMessage(&message)
 			consoleReader.Refresh()
 		case <-interrupt:
 			return
@@ -198,7 +231,23 @@ func (client *Client) run(cliOpts CommandLineOptions) {
 }
 
 func (client *Client) close() {
-	client.gracefulCloseConn()
+	if !atomic.CompareAndSwapUint32(&client.closed, 0, 1) {
+		return
+	}
+	close(client.readWsDoneChan)
+	if err := client.conn.Close(); err != nil {
+		wsdogLogger.Debugf("close client failed: %s", err.Error())
+	}
+}
+
+func (client *Client) gracefulClose() {
+	if !atomic.CompareAndSwapUint32(&client.closed, 0, 1) {
+		return
+	}
+	// Cleanly close the connection by sending a close message and then
+	// waiting (with timeout) for the server to close the connection.
+	client.doWriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
+	close(client.readWsDoneChan)
 	if err := client.conn.Close(); err != nil {
 		wsdogLogger.Debugf("close client failed: %s", err.Error())
 	}
@@ -229,9 +278,7 @@ func RunAsClient(url string, cliOpts CommandLineOptions) {
 	wsdogLogger.Ok("Connected (press CTRL+C to quit)")
 
 	readWsChan, readWsDoneChan := SetupReadFromConn(conn, cliOpts.ShowPingPong)
-	client := Client{conn, readWsChan, readWsDoneChan, cliOpts.EnableSlash}
-
-	defer client.close()
-
+	client := Client{conn, readWsChan, readWsDoneChan, cliOpts.EnableSlash, 0}
+	defer client.gracefulClose()
 	client.run(cliOpts)
 }
